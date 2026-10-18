@@ -62,7 +62,7 @@ public final class MainActivity extends Activity {
         toolbar.setPadding(dp(4), 0, dp(4), 0);
         toolbar.addView(button("返回", v -> navigateBack()));
         TextView title = new TextView(this);
-        title.setText("小龙影院");
+        title.setText("小龙影视");
         title.setTextSize(17);
         title.setTextColor(Color.WHITE);
         title.setGravity(Gravity.CENTER);
