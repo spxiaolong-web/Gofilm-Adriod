@@ -214,7 +214,7 @@ public final class MainActivity extends Activity {
         root.addView(fullScreen, matchParent());
         normalPage.setVisibility(View.GONE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        setImmersive(true);
+        applyImmersiveMode(true);
     }
 
     private void exitFullScreen() {
@@ -224,14 +224,14 @@ public final class MainActivity extends Activity {
         fullScreen = null;
         normalPage.setVisibility(View.VISIBLE);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        setImmersive(false);
+        applyImmersiveMode(false);
         WebChromeClient.CustomViewCallback callback = fullScreenCallback;
         fullScreenCallback = null;
         if (callback != null) callback.onCustomViewHidden();
     }
 
     @SuppressWarnings("deprecation")
-    private void setImmersive(boolean enabled) {
+    private void applyImmersiveMode(boolean enabled) {
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
