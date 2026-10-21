@@ -4,6 +4,10 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.view.KeyEvent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -33,6 +37,8 @@ import android.widget.Toast;
 public final class MainActivity extends Activity {
     private static final String HOME = "https://film.spxiaolong.com";
     private static final int BACKGROUND = Color.rgb(20, 20, 24);
+    private boolean television;
+    private TvRemoteController tvRemote;
     private FrameLayout root;
     private FrameLayout fullScreen;
     private LinearLayout normalPage;
@@ -48,6 +54,12 @@ public final class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     public void onCreate(Bundle state) {
         super.onCreate(state);
+        television = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK)
+                == Configuration.UI_MODE_TYPE_TELEVISION
+                || getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+        television = getPreferences(MODE_PRIVATE).getBoolean("television_mode", television);
+        if (television) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        else setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         root = new FrameLayout(this);
         root.setBackgroundColor(BACKGROUND);
         setContentView(root);
@@ -69,6 +81,13 @@ public final class MainActivity extends Activity {
         toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
         toolbar.addView(button("首页", v -> webView.loadUrl(HOME)));
         toolbar.addView(button("刷新", v -> retry()));
+        toolbar.addView(button(television ? "触屏" : "电视", v -> {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("television_mode", !television).apply();
+            recreate();
+        }));
+        if (television) toolbar.addView(button("遥控", v -> {
+            if (tvRemote != null) tvRemote.toggle();
+        }));
         normalPage.addView(toolbar);
 
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -161,9 +180,25 @@ public final class MainActivity extends Activity {
             }
         });
 
+        if (television) {
+            // Keep the page readable at television distance.
+            settings.setTextZoom(115);
+            tvRemote = new TvRemoteController(this, root,
+                    () -> { if (fullScreen == null) webView.scrollBy(0, -dp(120)); },
+                    () -> { if (fullScreen == null) webView.scrollBy(0, dp(120)); });
+            Toast.makeText(this, "方向键移动金色光标，确认键点击，返回键返回；菜单键切换遥控模式",
+                    Toast.LENGTH_LONG).show();
+        }
+
         if (state == null || webView.restoreState(state) == null) {
             webView.loadUrl(HOME);
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (tvRemote != null && tvRemote.handle(event)) return true;
+        return super.dispatchKeyEvent(event);
     }
 
     private boolean handleNavigation(Uri uri) {
@@ -212,6 +247,7 @@ public final class MainActivity extends Activity {
         exitParams.rightMargin = dp(12);
         fullScreen.addView(exit, exitParams);
         root.addView(fullScreen, matchParent());
+        if (tvRemote != null) tvRemote.bringToFront();
         normalPage.setVisibility(View.GONE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         applyImmersiveMode(true);
@@ -223,7 +259,7 @@ public final class MainActivity extends Activity {
         fullScreen.removeAllViews();
         fullScreen = null;
         normalPage.setVisibility(View.VISIBLE);
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (!television) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         applyImmersiveMode(false);
         WebChromeClient.CustomViewCallback callback = fullScreenCallback;
         fullScreenCallback = null;
@@ -287,6 +323,7 @@ public final class MainActivity extends Activity {
     protected void onPause() {
         exitFullScreen();
         webView.onPause();
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         super.onPause();
     }
 
@@ -294,6 +331,7 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
+        if (television) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     @Override
