@@ -139,13 +139,15 @@ final class TvRemoteController {
             super.onDraw(canvas);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.argb(180, 0, 0, 0));
-            canvas.drawCircle(x, y, dp(10), paint);
+            float cx = x - getLeft();
+            float cy = y - getTop();
+            canvas.drawCircle(cx, cy, dp(10), paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(dp(2));
             paint.setColor(Color.rgb(255, 208, 70));
-            canvas.drawCircle(x, y, dp(8), paint);
+            canvas.drawCircle(cx, cy, dp(8), paint);
             paint.setStyle(Paint.Style.FILL);
-            canvas.drawCircle(x, y, dp(2), paint);
+            canvas.drawCircle(cx, cy, dp(2), paint);
         }
     }
 }

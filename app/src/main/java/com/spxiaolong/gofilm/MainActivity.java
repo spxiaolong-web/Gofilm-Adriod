@@ -347,7 +347,7 @@ public final class MainActivity extends Activity {
     private Button button(String label, View.OnClickListener listener) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextSize(13);
+        b.setTextSize(television ? 16 : 13);
         b.setMinWidth(0);
         b.setMinimumWidth(0);
         b.setPadding(dp(10), 0, dp(10), 0);
