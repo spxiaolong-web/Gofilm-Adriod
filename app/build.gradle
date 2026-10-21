@@ -1,5 +1,9 @@
 plugins { id 'com.android.application' }
 
+def signingVariables = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD',
+                        'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+def signingReady = signingVariables.every { System.getenv(it)?.trim() }
+
 android {
     namespace 'com.spxiaolong.gofilm'
     compileSdk 35
@@ -7,12 +11,36 @@ android {
         applicationId 'com.spxiaolong.gofilm'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.2.0'
+    }
+    signingConfigs {
+        release {
+            if (signingReady) {
+                storeFile file(System.getenv('ANDROID_KEYSTORE_PATH'))
+                storeType 'PKCS12'
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
     }
     buildFeatures { buildConfig true }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Debug builds remain available locally; release builds must use the private key.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.project == project && it.name.endsWith('Release') }
+            && !signingReady) {
+        throw new GradleException('Release signing requires all four ANDROID signing environment variables.')
     }
 }

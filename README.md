@@ -7,8 +7,8 @@
 
 1. 打开本仓库的 **Actions**。
 2. 进入 **Build Android APK**，选择最近一次绿色成功的运行记录。
-3. 在页面底部 **Artifacts** 下载 **GoFilm-Android-debug**。
-4. 解压 ZIP，把 `app-debug.apk` 下载到安卓手机，点击安装。
+3. 在页面底部 **Artifacts** 下载 **GoFilm-Android-release**。
+4. 解压 ZIP，把 `app-release.apk` 下载到安卓手机，点击安装。
 5. 如系统询问，临时允许本次下载使用的浏览器或文件管理器安装应用，完成后可关闭该权限。
 
 也可以在 Actions 的 **Build Android APK → Run workflow** 手动编译。
@@ -43,7 +43,7 @@
 - WebView 播放能力受系统 WebView、编码、片源网络和跨域策略影响，需真机测试。
 - 不绕过 DRM、证书校验、访问控制；不能保证原网站的每条线路都兼容。
 - 使用内容须有相应授权；开源程序不附带影视内容授权。
-- 当前为 **debug 测试包**，不是上架版。不同云端运行的调试签名可能不同，后续版本可能需要卸载旧包才能安装（会清除本地登录状态）。正式更新前应配置长期保存的私有签名密钥，不能把密钥提交到公开仓库。
+- 当前为固定私有密钥签名的 **release 包**，尚未上架应用商店。首次从旧 debug 包切换时，需要卸载旧包（会清除本地登录状态）。此后保持相同包名、签名密钥，并提高 versionCode，即可覆盖更新。
 - 本仓库未包含 Gradle Wrapper；工作流固定安装 Gradle 8.11.1。电脑上可用相同版本运行 `gradle lintDebug assembleDebug`。
 
 ## 真机检查清单
@@ -51,3 +51,22 @@
 安装 → 打开首页 → 搜索 → 进入详情 → 用自己有权播放的测试视频检查播放 / 全屏 / 返回 → 断网后刷新检查错误提示 → 恢复联网重试。
 
 Actions 的 lint 和构建成功只代表静态检查、编译通过，不等于真机播放已经验证。
+
+## 固定签名与版本更新
+
+在仓库 Settings → Secrets and variables → Actions 添加以下 Repository secrets：
+
+| 名称 | 内容 |
+| --- | --- |
+| ANDROID_KEYSTORE_BASE64 | 私有 PKCS12 密钥文件的完整 Base64 编码 |
+| ANDROID_KEYSTORE_PASSWORD | 密钥库密码 |
+| ANDROID_KEY_ALIAS | 密钥别名（本项目生成时为 gofilm） |
+| ANDROID_KEY_PASSWORD | 密钥密码（本项目 PKCS12 生成时与密钥库密码相同） |
+
+Base64 不是加密。密钥及其编码文件、密码必须私下保存，不能提交到仓库。
+工作流在临时目录恢复密钥，检查别名、编译并验证 APK 签名，随后删除临时密钥。
+缺少 Secrets 或签名错误会导致构建失败，不会退回调试签名。
+
+每次发布新版本，在 app/build.gradle 中提高 versionCode，并修改 versionName。
+当前为 versionCode 2 / versionName 0.2.0。下一次可使用 3 / 0.3.0。
+APK 作为 Actions Artifact 保留 14 天；此工作流不会自动创建 GitHub Release。
