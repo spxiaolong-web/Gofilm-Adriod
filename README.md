@@ -1,4 +1,4 @@
-# 小龙影院 · Android 学习版
+# 小龙影视 · Android 学习版
 
 这是一个用 Java 和 Android WebView 编写的手机应用，加载自己的 HTTPS 网站：
 `https://film.spxiaolong.com`。
@@ -20,7 +20,7 @@
 | --- | --- |
 | `app/src/main/java/com/spxiaolong/gofilm/MainActivity.java` | App 的界面、网站加载、网页返回、视频全屏 |
 | `app/src/main/AndroidManifest.xml` | 应用入口、名称、联网权限 |
-| `app/src/main/res/drawable/ic_launcher.xml` | 桌面图标 |
+| `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` | 自适应桌面图标 |
 | `app/build.gradle` | 包名、版本、支持的 Android 版本 |
 | `.github/workflows/build-apk.yml` | GitHub 云端检查、编译和保存 APK |
 
@@ -68,5 +68,12 @@ Base64 不是加密。密钥及其编码文件、密码必须私下保存，不�
 缺少 Secrets 或签名错误会导致构建失败，不会退回调试签名。
 
 每次发布新版本，在 app/build.gradle 中提高 versionCode，并修改 versionName。
-当前为 versionCode 2 / versionName 0.2.0。下一次可使用 3 / 0.3.0。
+当前为 versionCode 3 / versionName 0.3.0。下一次可使用 4 / 0.4.0。
 APK 作为 Actions Artifact 保留 14 天；此工作流不会自动创建 GitHub Release。
+
+## v0.3.0 图标更新
+
+- 使用原创深蓝底金龙图案，资源在 drawable-nodpi/dragon_artwork.png。
+- 自适应图标分为背景与前景；前景保留边距，适配圆形、圆角方形等桌面遮罩。
+- 本次仅更新图标和版本号，继续使用原有包名与固定签名。
+- 安装时直接覆盖 v0.2.0，不需卸载；安装后检查桌面图标、登录状态和播放。
