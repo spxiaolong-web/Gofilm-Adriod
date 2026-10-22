@@ -6,7 +6,7 @@ const script = fs.readFileSync('app/src/main/assets/tv-player.js', 'utf8');
 function setup(origin = 'film.spxiaolong.com', pathname = '/play') {
   let currentVideo = null;
   const nodes = {};
-  const player = {};
+  const player = {id:'original-player',setAttribute(key,value){this[key]=value;}};
   function makeVideo() {
     const listeners = {};
     return {paused:true, ended:false, readyState:2, currentTime:25, duration:100, controls:true,
@@ -34,7 +34,8 @@ function setup(origin = 'film.spxiaolong.com', pathname = '/play') {
   assert.equal(api.state().ready,true);
   assert.equal(video.playCalls,1); // explicit episode selection starts when ready
   assert.equal(video.controls,false);
-  assert.equal(fixture.player.id,'tv-video-root');
+  assert.equal(fixture.player.id,'original-player');
+  assert.equal(fixture.player['data-tv-video-root'],'true');
   assert.ok(fixture.nodes['tv-player-style'].textContent.includes('object-fit:contain'));
   api.command('pause');assert.equal(video.paused,true);
   video.listeners.canplay();assert.equal(video.paused,true); // buffering must not undo a manual pause
