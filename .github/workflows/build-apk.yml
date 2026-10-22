@@ -18,6 +18,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Check catalogue networking regression cases
+        run: |
+          javac -d "$RUNNER_TEMP/catalog-tests" app/src/main/java/com/spxiaolong/gofilm/CatalogEndpoint.java tools/CatalogEndpointTest.java
+          java -cp "$RUNNER_TEMP/catalog-tests" com.spxiaolong.gofilm.CatalogEndpointTest
+          node tools/test-web-catalog.cjs
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:

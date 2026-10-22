@@ -20,7 +20,13 @@ final class TvApi {
     };
 
     JSONObject get(String path) throws Exception {
-        JSONObject response = new JSONObject(new String(read(HOME + path, 3 * 1024 * 1024), StandardCharsets.UTF_8));
+        CatalogEndpoint.requirePath(path);
+        return decode(path, new String(read(HOME + path, 3 * 1024 * 1024), StandardCharsets.UTF_8));
+    }
+
+    JSONObject decode(String path, String body) throws Exception {
+        if (body.length() > 3 * 1024 * 1024) throw new IOException("返回内容过大");
+        JSONObject response = new JSONObject(body);
         if (response.optInt("code", -1) != 0) {
             String message = response.optString("msg", "数据加载失败");
             if (path.startsWith("/api/searchFilm?") && message.contains("暂无")) {
@@ -63,7 +69,8 @@ final class TvApi {
             connection.setConnectTimeout(12000);
             connection.setReadTimeout(20000);
             connection.setInstanceFollowRedirects(false);
-            connection.setRequestProperty("User-Agent", "GoFilm-Android-TV/0.5.0");
+            connection.setRequestProperty("User-Agent", "GoFilm-Android-TV/0.5.1");
+            connection.setRequestProperty("Referer", HOME + "/");
             connection.setRequestProperty("Accept", "application/json,image/*;q=0.9,*/*;q=0.8");
             try {
                 int status = connection.getResponseCode();

@@ -48,6 +48,7 @@ public final class TvCatalogActivity extends Activity {
     private final ArrayList<Screen> stack = new ArrayList<>();
     private final ArrayList<Future<?>> imageTasks = new ArrayList<>();
     private Future<?> request;
+    private WebCatalogTransport webTransport;
     private FrameLayout host;
     private ProgressBar loading;
     private ScrollView scroll;
@@ -85,6 +86,7 @@ public final class TvCatalogActivity extends Activity {
             return insets;
         });
         setContentView(root);
+        webTransport = new WebCatalogTransport(this, root);
 
         LinearLayout header = row();
         ImageView logo = new ImageView(this);
@@ -159,10 +161,25 @@ public final class TvCatalogActivity extends Activity {
         if (screen.data != null) { render(screen); return; }
         request = network.submit(() -> {
             try {
-                JSONObject data = api.get(screen.path);
+                JSONObject data;
+                try {
+                    data = api.decode(screen.path, webTransport.get(screen.path));
+                } catch (InterruptedException cancelled) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (Exception browserFailure) {
+                    if (Thread.currentThread().isInterrupted()) return;
+                    try {
+                        data = api.get(screen.path);
+                    } catch (Exception systemFailure) {
+                        throw new java.io.IOException("网页通道：" + safeMessage(browserFailure)
+                                + "\n系统通道：" + safeMessage(systemFailure));
+                    }
+                }
+                final JSONObject loadedData = data;
                 ui.post(() -> {
                     if (isFinishing() || isDestroyed() || token != generation) return;
-                    screen.data = data;
+                    screen.data = loadedData;
                     render(screen);
                 });
             } catch (Exception exception) {
@@ -172,7 +189,9 @@ public final class TvCatalogActivity extends Activity {
                     LinearLayout panel = column();
                     panel.setGravity(Gravity.CENTER);
                     panel.addView(text("暂时没有加载成功", 26, Color.WHITE, true));
-                    TextView message = text("请检查网络后重试。" + safeMessage(exception), 16, Color.LTGRAY, false);
+                    TextView message = text(safeMessage(exception), 16, Color.LTGRAY, false);
+                    message.setMaxWidth(dp(740));
+                    message.setGravity(Gravity.CENTER);
                     message.setPadding(0, dp(16), 0, dp(20));
                     panel.addView(message);
                     Button retry = button("重新加载", () -> load(screen));
@@ -185,9 +204,17 @@ public final class TvCatalogActivity extends Activity {
     }
 
     private String safeMessage(Exception exception) {
+        if (exception instanceof javax.net.ssl.SSLException) return "安全连接失败（TLS/系统证书）";
+        if (exception instanceof java.net.UnknownHostException) return "域名解析失败（DNS）";
+        if (exception instanceof java.net.SocketTimeoutException) return "服务器连接超时";
+        if (exception instanceof java.net.ConnectException) return "无法连接服务器";
+        if (exception instanceof org.json.JSONException) return "接口未返回有效的 JSON 数据";
+        if (exception instanceof java.io.InterruptedIOException) return "网络请求被中断";
         String message = exception.getMessage();
-        if (message != null && (message.startsWith("服务器返回 HTTP") || message.startsWith("网站没有"))) return "\n" + message;
-        return "";
+        if (message != null && (message.startsWith("服务器返回 HTTP") || message.startsWith("网站没有")
+                || message.startsWith("浏览器") || message.startsWith("网页通道：")
+                || message.startsWith("返回内容过大"))) return message;
+        return "请求失败（" + exception.getClass().getSimpleName() + "）";
     }
 
     private void render(Screen screen) {
@@ -586,6 +613,7 @@ public final class TvCatalogActivity extends Activity {
 
     @Override protected void onDestroy() {
         generation++;
+        if (webTransport != null) webTransport.close();
         network.shutdownNow();
         pictures.shutdownNow();
         ui.removeCallbacksAndMessages(null);
