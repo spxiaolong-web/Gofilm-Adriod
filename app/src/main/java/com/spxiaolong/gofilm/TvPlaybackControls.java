@@ -36,6 +36,7 @@ final class TvPlaybackControls {
     private boolean active;
     private boolean closed;
     private boolean ready;
+    private boolean dismissed;
     private long lastInteraction;
 
     TvPlaybackControls(Activity activity, FrameLayout root, WebView browser, String title, Runnable classicPlayer) {
@@ -106,6 +107,7 @@ final class TvPlaybackControls {
 
     private void command(String action) {
         lastInteraction = SystemClock.uptimeMillis();
+        if (action.equals("toggle") || action.equals("play") || action.equals("pause")) dismissed = false;
         browser.evaluateJavascript("window.__tvPlayer ? window.__tvPlayer.command(" + JSONObject.quote(action) + ") : false", value -> {
             if (closed) return;
             if (!"true".equals(value)) {
@@ -153,12 +155,13 @@ final class TvPlaybackControls {
     }
 
     private void show() {
+        dismissed = false;
         lastInteraction = SystemClock.uptimeMillis();
         overlay.setVisibility(View.VISIBLE);
         overlay.bringToFront();
         play.requestFocus();
     }
-    private void hide() { overlay.setVisibility(View.GONE); }
+    private void hide() { dismissed = true; overlay.setVisibility(View.GONE); }
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -181,7 +184,7 @@ final class TvPlaybackControls {
                         status.setText((state.optBoolean("ended") ? "播放结束  ·  " : paused ? "已暂停  ·  " : "")
                                 + time(current) + " / " + (duration > 0 ? time(duration) : "直播"));
                         if (paused) showIfHidden();
-                        else if (SystemClock.uptimeMillis() - lastInteraction > 5500) hide();
+                        else if (SystemClock.uptimeMillis() - lastInteraction > 5500) overlay.setVisibility(View.GONE);
                     }
                 } catch (Exception ignored) { status.setText("正在读取播放状态…"); }
             });
@@ -189,7 +192,7 @@ final class TvPlaybackControls {
         }
     };
 
-    private void showIfHidden() { if (overlay.getVisibility() != View.VISIBLE) show(); }
+    private void showIfHidden() { if (!dismissed && overlay.getVisibility() != View.VISIBLE) show(); }
     void resume() { if (closed) return; active = true; ui.removeCallbacks(tick); ui.post(tick); }
     void pause() {
         active = false;
