@@ -39,6 +39,8 @@ public final class MainActivity extends Activity {
     private static final int BACKGROUND = Color.rgb(20, 20, 24);
     private boolean television;
     private TvRemoteController tvRemote;
+    private TvPlaybackControls tvPlayback;
+    private boolean tvPlaybackMode;
     private FrameLayout root;
     private FrameLayout fullScreen;
     private LinearLayout normalPage;
@@ -58,6 +60,15 @@ public final class MainActivity extends Activity {
                 == Configuration.UI_MODE_TYPE_TELEVISION
                 || getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
         television = getPreferences(MODE_PRIVATE).getBoolean("television_mode", television);
+        String requestedUrl = getIntent().getStringExtra("start_url");
+        Uri requested = requestedUrl == null ? null : Uri.parse(requestedUrl);
+        tvPlaybackMode = !getIntent().getBooleanExtra("classic_player", false)
+                && getIntent().getBooleanExtra("from_tv_catalog", false)
+                && requested != null && "https".equalsIgnoreCase(requested.getScheme())
+                && "film.spxiaolong.com".equalsIgnoreCase(requested.getHost())
+                && (requested.getPort() == -1 || requested.getPort() == 443)
+                && "/play".equals(requested.getPath());
+        if (tvPlaybackMode) television = true;
         if (television) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         else setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         root = new FrameLayout(this);
@@ -123,7 +134,7 @@ public final class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setMediaPlaybackRequiresUserGesture(!tvPlaybackMode);
         settings.setSupportMultipleWindows(false);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
@@ -137,6 +148,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                if (tvPlayback != null) tvPlayback.pageStarted();
                 mainPageFailed = false;
                 retryUrl = url;
                 errorPanel.setVisibility(View.GONE);
@@ -147,6 +159,7 @@ public final class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
                 CookieManager.getInstance().flush();
+                if (tvPlayback != null) tvPlayback.install();
             }
 
             @Override
@@ -183,7 +196,7 @@ public final class MainActivity extends Activity {
             }
         });
 
-        if (television) {
+        if (television && !tvPlaybackMode) {
             // Keep the page readable at television distance.
             settings.setTextZoom(115);
             tvRemote = new TvRemoteController(this, root,
@@ -193,6 +206,17 @@ public final class MainActivity extends Activity {
                     Toast.LENGTH_LONG).show();
         }
 
+        if (tvPlaybackMode) {
+            toolbar.setVisibility(View.GONE);
+            webView.setFocusable(false);
+            webView.setFocusableInTouchMode(false);
+            tvPlayback = new TvPlaybackControls(this, root, webView, getIntent().getStringExtra("movie_title"), () -> {
+                startActivity(new Intent(this, MainActivity.class).putExtra("web_player", true)
+                        .putExtra("from_tv_catalog", true).putExtra("classic_player", true)
+                        .putExtra("start_url", retryUrl));
+                finish();
+            });
+        }
         if (television && !getIntent().getBooleanExtra("web_player", false)) {
             startActivity(new Intent(this, TvCatalogActivity.class));
             finish();
@@ -210,6 +234,7 @@ public final class MainActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (tvPlayback != null && tvPlayback.handle(event)) return true;
         if (tvRemote != null && tvRemote.handle(event)) return true;
         return super.dispatchKeyEvent(event);
     }
@@ -258,9 +283,10 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams exitParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         exitParams.topMargin = dp(24);
         exitParams.rightMargin = dp(12);
-        fullScreen.addView(exit, exitParams);
+        if (tvPlayback == null) fullScreen.addView(exit, exitParams);
         root.addView(fullScreen, matchParent());
         if (tvRemote != null) tvRemote.bringToFront();
+        if (tvPlayback != null) tvPlayback.bringToFront();
         normalPage.setVisibility(View.GONE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         applyImmersiveMode(true);
@@ -335,6 +361,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (tvPlayback != null) tvPlayback.pause();
         exitFullScreen();
         webView.onPause();
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -345,11 +372,13 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
+        if (tvPlayback != null) tvPlayback.resume();
         if (television) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     @Override
     protected void onDestroy() {
+        if (tvPlayback != null) tvPlayback.close();
         if (webView != null) {
             ((ViewGroup) webView.getParent()).removeView(webView);
             webView.stopLoading();

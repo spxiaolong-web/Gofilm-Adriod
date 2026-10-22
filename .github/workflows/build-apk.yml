@@ -23,6 +23,7 @@ jobs:
           javac -d "$RUNNER_TEMP/catalog-tests" app/src/main/java/com/spxiaolong/gofilm/CatalogEndpoint.java tools/CatalogEndpointTest.java
           java -cp "$RUNNER_TEMP/catalog-tests" com.spxiaolong.gofilm.CatalogEndpointTest
           node tools/test-web-catalog.cjs
+          node tools/test-tv-player.cjs
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:

@@ -410,7 +410,10 @@ public final class TvCatalogActivity extends Activity {
                 .appendQueryParameter("id", id).appendQueryParameter("source", source.optString("id"))
                 .appendQueryParameter("episode", String.valueOf(episode)).build().toString();
         remember();
-        openWeb(url);
+        startActivity(new Intent(this, MainActivity.class).putExtra("web_player", true)
+                .putExtra("from_tv_catalog", true).putExtra("start_url", url)
+                .putExtra("movie_title", detail.optString("name") + " · "
+                        + array(source, "linkList").optJSONObject(episode).optString("episode", "")));
     }
 
     private void openWeb(String url) {
