@@ -79,7 +79,10 @@ public final class MainActivity extends Activity {
         title.setTextColor(Color.WHITE);
         title.setGravity(Gravity.CENTER);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
-        toolbar.addView(button("首页", v -> webView.loadUrl(HOME)));
+        toolbar.addView(button(getIntent().getBooleanExtra("from_tv_catalog", false) ? "片库" : "首页", v -> {
+            if (getIntent().getBooleanExtra("from_tv_catalog", false)) finish();
+            else webView.loadUrl(HOME);
+        }));
         toolbar.addView(button("刷新", v -> retry()));
         toolbar.addView(button(television ? "触屏" : "电视", v -> {
             getPreferences(MODE_PRIVATE).edit().putBoolean("television_mode", !television).apply();
@@ -190,8 +193,18 @@ public final class MainActivity extends Activity {
                     Toast.LENGTH_LONG).show();
         }
 
+        if (television && !getIntent().getBooleanExtra("web_player", false)) {
+            startActivity(new Intent(this, TvCatalogActivity.class));
+            finish();
+            return;
+        }
         if (state == null || webView.restoreState(state) == null) {
-            webView.loadUrl(HOME);
+            String start = getIntent().getStringExtra("start_url");
+            Uri uri = start == null ? null : Uri.parse(start);
+            if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())
+                    || !"film.spxiaolong.com".equalsIgnoreCase(uri.getHost())
+                    || (uri.getPort() != -1 && uri.getPort() != 443)) start = HOME;
+            webView.loadUrl(start);
         }
     }
 
@@ -303,6 +316,7 @@ public final class MainActivity extends Activity {
     @SuppressWarnings("deprecation")
     private void navigateBack() {
         if (fullScreen != null) exitFullScreen();
+        else if (getIntent().getBooleanExtra("from_tv_catalog", false)) finish();
         else if (webView.canGoBack()) {
             errorPanel.setVisibility(View.GONE);
             webView.goBack();
