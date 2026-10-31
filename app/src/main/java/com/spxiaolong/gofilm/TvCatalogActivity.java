@@ -173,7 +173,7 @@ public final class TvCatalogActivity extends Activity {
                         data = api.get(screen.path);
                     } catch (Exception systemFailure) {
                         throw new java.io.IOException("网页通道：" + safeMessage(browserFailure)
-                                + "\n系统通道：" + safeMessage(systemFailure));
+                                + "\n系统通道：" + safeMessage(systemFailure), systemFailure);
                     }
                 }
                 final JSONObject loadedData = data;
@@ -196,6 +196,7 @@ public final class TvCatalogActivity extends Activity {
                     panel.addView(message);
                     Button retry = button("重新加载", () -> load(screen));
                     panel.addView(retry);
+                    panel.addView(button("诊断信息", () -> showNetworkDiagnostics(exception)));
                     host.addView(panel, new FrameLayout.LayoutParams(-1, -1));
                     retry.requestFocus();
                 });
@@ -215,6 +216,43 @@ public final class TvCatalogActivity extends Activity {
                 || message.startsWith("浏览器") || message.startsWith("网页通道：")
                 || message.startsWith("返回内容过大"))) return message;
         return "请求失败（" + exception.getClass().getSimpleName() + "）";
+    }
+
+    /** Local-only diagnostic text: no identifiers, cookies or full request URLs. */
+    private void showNetworkDiagnostics(Exception failure) {
+        String webView = "未识别";
+        try {
+            android.content.pm.PackageInfo info = android.webkit.WebView.getCurrentWebViewPackage();
+            if (info != null) webView = info.packageName + " " + info.versionName;
+        } catch (RuntimeException ignored) { }
+        StringBuilder report = new StringBuilder("小龙影视 " + BuildConfig.VERSION_NAME
+                + "\nAndroid " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT
+                + "\nWebView: " + webView
+                + "\n设备时间: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z",
+                        java.util.Locale.ROOT).format(new java.util.Date())
+                + "\n网站: " + TvApi.HOME + "\n\n");
+        Throwable cause = failure;
+        for (int i = 0; cause != null && i < 5; i++) {
+            report.append(cause.getClass().getSimpleName()).append(": ");
+            String message = cause.getMessage();
+            if (message != null) {
+                // Preserve errno/TLS hints while omitting URLs and query parameters.
+                message = message.replaceAll("https?://[^\\s]+", "[网址]")
+                        .replaceAll("[\\r\\n\\t]+", " ");
+                report.append(message.length() > 400 ? message.substring(0, 400) + "…" : message);
+            }
+            report.append("\n");
+            Throwable next = cause.getCause();
+            if (next == cause) break;
+            cause = next;
+        }
+        TextView details = text(report.toString(), 16, Color.WHITE, false);
+        details.setTextIsSelectable(true);
+        details.setPadding(dp(20), dp(16), dp(20), dp(16));
+        ScrollView container = new ScrollView(this);
+        container.addView(details);
+        new AlertDialog.Builder(this).setTitle("网络诊断（请拍照）")
+                .setView(container).setPositiveButton("关闭", null).show();
     }
 
     private void render(Screen screen) {
