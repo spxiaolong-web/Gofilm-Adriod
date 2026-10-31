@@ -49,6 +49,8 @@ public final class TvCatalogActivity extends Activity {
     private final ArrayList<Future<?>> imageTasks = new ArrayList<>();
     private Future<?> request;
     private WebCatalogTransport webTransport;
+    private TvConnectionProbe connectionProbe;
+    private Future<?> probeRequest;
     private FrameLayout host;
     private ProgressBar loading;
     private ScrollView scroll;
@@ -252,7 +254,31 @@ public final class TvCatalogActivity extends Activity {
         ScrollView container = new ScrollView(this);
         container.addView(details);
         new AlertDialog.Builder(this).setTitle("网络诊断（请拍照）")
-                .setView(container).setPositiveButton("关闭", null).show();
+                .setView(container).setPositiveButton("关闭", null)
+                .setNeutralButton("检测连接", (dialog, which) -> showConnectionProbe()).show();
+    }
+
+    private void showConnectionProbe() {
+        if (connectionProbe != null) connectionProbe.close();
+        if (probeRequest != null) probeRequest.cancel(true);
+        TvConnectionProbe probe = new TvConnectionProbe();
+        connectionProbe = probe;
+        TextView details = text("小龙影视 " + BuildConfig.VERSION_NAME + "\n正在检测，请稍候……\n", 16, Color.WHITE, false);
+        details.setPadding(dp(20), dp(16), dp(20), dp(16));
+        details.setTextIsSelectable(true);
+        ScrollView container = new ScrollView(this);
+        container.setFocusable(true);
+        container.addView(details);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("连接检测")
+                .setView(container).setPositiveButton("关闭", null).create();
+        dialog.setOnDismissListener(ignored -> {
+            probe.close();
+            if (connectionProbe == probe && probeRequest != null) probeRequest.cancel(true);
+        });
+        dialog.show();
+        probeRequest = network.submit(() -> probe.run(line -> ui.post(() -> {
+            if (!isDestroyed() && !isFinishing() && dialog.isShowing()) details.append(line);
+        })));
     }
 
     private void render(Screen screen) {
@@ -655,6 +681,8 @@ public final class TvCatalogActivity extends Activity {
     @Override protected void onDestroy() {
         generation++;
         if (webTransport != null) webTransport.close();
+        if (connectionProbe != null) connectionProbe.close();
+        if (probeRequest != null) probeRequest.cancel(true);
         network.shutdownNow();
         pictures.shutdownNow();
         ui.removeCallbacksAndMessages(null);
