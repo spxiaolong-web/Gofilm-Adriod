@@ -24,6 +24,7 @@ jobs:
           java -cp "$RUNNER_TEMP/catalog-tests" com.spxiaolong.gofilm.CatalogEndpointTest
           node tools/test-web-catalog.cjs
           node tools/test-tv-player.cjs
+          node tools/test-watch-history.cjs
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:

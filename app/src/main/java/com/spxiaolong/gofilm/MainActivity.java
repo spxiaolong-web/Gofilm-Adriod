@@ -51,11 +51,38 @@ public final class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullScreenCallback;
     private boolean mainPageFailed;
     private String retryUrl = HOME;
+    private WatchHistory watchHistory;
+    private final android.os.Handler historyHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private String historyScript = "";
+    private String historyRestartKey = "";
+    private boolean historyForeground;
+    private int historyPage;
+    private boolean historyPending;
+    private boolean historyInstalled;
+    private final Runnable historyTick = new Runnable() {
+        @Override public void run() {
+            if (!historyForeground) return;
+            sampleWatchHistory();
+            historyHandler.postDelayed(this, 2000);
+        }
+    };
 
     @Override
     @SuppressLint("SetJavaScriptEnabled")
     public void onCreate(Bundle state) {
         super.onCreate(state);
+        watchHistory = new WatchHistory(this);
+        if (getIntent().getBooleanExtra("restart_history", false)) {
+            String start = getIntent().getStringExtra("start_url");
+            if (start != null) historyRestartKey = WatchHistory.keyForUrl(start);
+        }
+        try (java.io.InputStream input = getAssets().open("watch-history.js");
+             java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
+            historyScript = bytes.toString("UTF-8");
+        } catch (java.io.IOException ignored) { }
         television = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK)
                 == Configuration.UI_MODE_TYPE_TELEVISION
                 || getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
@@ -94,6 +121,8 @@ public final class MainActivity extends Activity {
             if (getIntent().getBooleanExtra("from_tv_catalog", false)) finish();
             else webView.loadUrl(HOME);
         }));
+        toolbar.addView(button("历史", v -> watchHistory.show(this, (entry, restart) ->
+                openHistory(entry, restart))));
         toolbar.addView(button("刷新", v -> retry()));
         toolbar.addView(button(television ? "触屏" : "电视", v -> {
             getPreferences(MODE_PRIVATE).edit().putBoolean("television_mode", !television).apply();
@@ -148,6 +177,9 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                historyPage++;
+                historyPending = false;
+                historyInstalled = false;
                 if (tvPlayback != null) tvPlayback.pageStarted();
                 mainPageFailed = false;
                 retryUrl = url;
@@ -160,6 +192,7 @@ public final class MainActivity extends Activity {
                 progress.setVisibility(View.GONE);
                 CookieManager.getInstance().flush();
                 if (tvPlayback != null) tvPlayback.install();
+                sampleWatchHistory();
             }
 
             @Override
@@ -237,6 +270,46 @@ public final class MainActivity extends Activity {
         if (tvPlayback != null && tvPlayback.handle(event)) return true;
         if (tvRemote != null && tvRemote.handle(event)) return true;
         return super.dispatchKeyEvent(event);
+    }
+
+    private void openHistory(WatchHistory.Entry entry, boolean restart) {
+        sampleWatchHistory();
+        startActivity(new Intent(this, MainActivity.class)
+                .putExtra("web_player", true)
+                .putExtra("classic_player", television)
+                .putExtra("start_url", entry.url())
+                .putExtra("movie_title", entry.title)
+                .putExtra("restart_history", restart));
+    }
+
+    private void sampleWatchHistory() {
+        if (webView == null || mainPageFailed || historyPending || historyScript.isEmpty() || isDestroyed()) return;
+        String url = webView.getUrl();
+        if (url == null || WatchHistory.keyForUrl(url).isEmpty()) return;
+        int page = historyPage;
+        historyPending = true;
+        // Read from the current same-origin document without exposing a JavaScript bridge.
+        String setup = historyInstalled ? "" : "if(!window.__gofilmHistory){" + historyScript
+                + ";window.__gofilmHistory.configure(" + watchHistory.positions() + ","
+                + org.json.JSONObject.quote(historyRestartKey) + ");}";
+        String script = "(function(){if(location.origin!=='https://film.spxiaolong.com'||location.pathname!=='/play')return null;"
+                + setup + "return window.__gofilmHistory ? (window.__gofilmHistory.sample()||true) : null;})()";
+        webView.evaluateJavascript(script, raw -> {
+            if (page != historyPage) return;
+            historyPending = false;
+            historyInstalled = "true".equals(raw) || (raw != null && raw.startsWith("{"));
+            if (!historyInstalled || "true".equals(raw)) return;
+            try {
+                org.json.JSONObject sample = new org.json.JSONObject(raw);
+                String start = getIntent().getStringExtra("start_url");
+                watchHistory.save(sample, getIntent().getStringExtra("movie_title"),
+                        start == null ? "" : WatchHistory.keyForUrl(start));
+                if (sample.optString("key").equals(historyRestartKey)) {
+                    historyRestartKey = "";
+                    getIntent().removeExtra("restart_history");
+                }
+            } catch (org.json.JSONException ignored) { }
+        });
     }
 
     private boolean handleNavigation(Uri uri) {
@@ -361,6 +434,9 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        sampleWatchHistory();
+        historyForeground = false;
+        historyHandler.removeCallbacks(historyTick);
         if (tvPlayback != null) tvPlayback.pause();
         exitFullScreen();
         webView.onPause();
@@ -373,11 +449,16 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (webView != null) webView.onResume();
         if (tvPlayback != null) tvPlayback.resume();
+        historyForeground = true;
+        historyHandler.removeCallbacks(historyTick);
+        historyHandler.post(historyTick);
         if (television) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     @Override
     protected void onDestroy() {
+        historyForeground = false;
+        historyHandler.removeCallbacks(historyTick);
         if (tvPlayback != null) tvPlayback.close();
         if (webView != null) {
             ((ViewGroup) webView.getParent()).removeView(webView);

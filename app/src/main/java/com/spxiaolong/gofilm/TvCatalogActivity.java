@@ -102,6 +102,7 @@ public final class TvCatalogActivity extends Activity {
         homeButton = button("首页", () -> goHome());
         header.addView(homeButton);
         header.addView(button("搜索", this::searchDialog));
+        header.addView(button("历史", () -> new WatchHistory(this).show(this, this::openHistory)));
         header.addView(button("网页模式", () -> openWeb(TvApi.HOME)));
         root.addView(header, new LinearLayout.LayoutParams(-1, dp(64)));
         loading = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -478,6 +479,13 @@ public final class TvCatalogActivity extends Activity {
                 .putExtra("from_tv_catalog", true).putExtra("start_url", url)
                 .putExtra("movie_title", detail.optString("name") + " · "
                         + array(source, "linkList").optJSONObject(episode).optString("episode", "")));
+    }
+
+    private void openHistory(WatchHistory.Entry entry, boolean restart) {
+        remember();
+        startActivity(new Intent(this, MainActivity.class).putExtra("web_player", true)
+                .putExtra("from_tv_catalog", true).putExtra("start_url", entry.url())
+                .putExtra("movie_title", entry.title).putExtra("restart_history", restart));
     }
 
     private void openWeb(String url) {
